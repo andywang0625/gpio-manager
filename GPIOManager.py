@@ -1,16 +1,19 @@
 try:
     import tkinter as tk
     import tkinter.messagebox
+    from tkinter import *
     import time
+    import datetime
     import RPi.GPIO as GPIO
     import io,shutil
     import urllib
     import threading
     import queue
+    import os
     from http.server import HTTPServer,BaseHTTPRequestHandler
 except ImportError:
     print("Importing Package(s) Failed")
-
+    
 messageQueue = queue.Queue(10)
 GPIOStatusG = [0]*40
 
@@ -24,12 +27,15 @@ class httpServer(threading.Thread):
             def do_GET(self):
                 if '?' in self.path:
                     #command,targetPort=urllib.Request.splitquery(self.path)
-
+                    
                     rawRequests = self.path[2:]
                     cookedRequests = rawRequests.split("&")
                     #print(type(cookedRequests))
                     for req in cookedRequests:
                         attr = req.split("=")
+                        if attr[0]=="alert":
+                            pass
+                        #implement needed
                         #print(attr[0]+"\n"+attr[1])
                         #print(type(messageQueue))
                         messageQueue.put((attr[0],attr[1]))
@@ -75,6 +81,35 @@ class httpServer(threading.Thread):
                                 int(self.port)),
                                 GPIOHttpHandler)
         self.httpServer.serve_forever()
+        
+class timmerAlarm(threading.Thread):
+    def __init__(self, day=0, hour=0, mins=0, sec=3):
+        threading.Thread.__init__(self)
+        self.day = day
+        self.hour = hour
+        self.mins = mins
+        self.sec = sec
+        #print(self.sec)
+        #print(sec)
+    def run(self):
+        self.current = datetime.datetime.now()
+        #print(self.sec)
+        print(datetime.timedelta(days=self.day, hours=self.hour, minutes=self.mins, seconds=int(self.sec)))
+        timeLeft = self.current+datetime.timedelta(days=self.day, hours=self.hour, minutes=self.mins, seconds=int(self.sec))
+        #print(self.current)
+        print(timeLeft)
+        
+        while(1):
+            self.current = datetime.datetime.now()
+            if self.current > timeLeft:
+                #print("done")
+                for i in range(10):
+                    messageQueue.put(("port", 1))
+                    time.sleep(1)
+                    messageQueue.put(("port", 1))
+                    time.sleep(0.5)
+                return
+
 class GPIOManager:
     def __init__(self):
         self.GPIOStatus = [0]*40
@@ -86,16 +121,21 @@ class GPIOManager:
             GPIO.setup(TheGPIO[1], 0)
             GPIO.output(TheGPIO[1], 0)
         self.drawWindow()
-
+    
     def updatePorts(self):
         i = 0
         for TheGPIO in self.GPIO2Board.items():
             GPIO.output(TheGPIO[1], self.GPIOStatus[i])
             i = i+1
         self.GPIOSwitch()
-
+    
+    def setTimer(self, day=0, hour=0, mins=0, sec=0):
+        NewTimer = timmerAlarm(day=day, hour=hour, mins=mins, sec=sec)
+        NewTimer.start()
+        
     def drawWindow(self):
         self.window = tk.Tk()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.window.title('GPIO Manager')
         self.window.geometry('600x800')
         self.board = tk.Text(self.window,
@@ -103,6 +143,24 @@ class GPIOManager:
                         height=17)
         self.board.pack()
         self.GPIOSwitch()
+        dayEntry = Entry(self.window,textvariable="0")
+        dayEntry.insert(END, '0')
+        dayEntry.pack(side=tk.TOP)
+        hourEntry = Entry(self.window)
+        hourEntry.insert(END, '0')
+        hourEntry.pack(side=tk.TOP)
+        minEntry = Entry(self.window)
+        minEntry.insert(END, '0')
+        minEntry.pack(side=tk.TOP)
+        secEntry = Entry(self.window)
+        secEntry.insert(END, '0')
+        secEntry.pack(side=tk.TOP)
+        setTimer = tk.Button(self.window,
+                          text="Set Timer",
+                          width=15,
+                          height=1,
+                          command=lambda :self.setTimer(day=int(dayEntry.get()), hour=int(hourEntry.get()), mins=int(minEntry.get()), sec=int(secEntry.get())))
+        setTimer.pack(side=tk.TOP)
         AllOff = tk.Button(self.window,
                           text="All Off",
                           width=15,
@@ -255,8 +313,10 @@ class GPIOManager:
 
         gpio29.pack()
 
-
-
+    def on_closing(self):
+        self.window.destroy()
+        os._exit(0)
+        
     def GPIOsON(self):
         """
         Turn Every Ports On
@@ -286,7 +346,10 @@ class GPIOManager:
         GPIOStatusG = self.GPIOStatus[:]
     def mainLoop(self, window):
         while 1:
-            window.update()
+            try:
+                window.update()
+            except:
+                exit()
             if not messageQueue.empty():
                 message = messageQueue.get(block=False)
                 if(message[0]=="port"):
@@ -306,6 +369,6 @@ def main():
     Manager.mainLoop(Manager.window)
 
 
-
+    
 if __name__ == '__main__':
     main()
