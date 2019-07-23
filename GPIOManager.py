@@ -31,10 +31,17 @@ class httpServer(threading.Thread):
                     rawRequests = self.path[2:]
                     cookedRequests = rawRequests.split("&")
                     #print(type(cookedRequests))
+                    isAPI = False
                     for req in cookedRequests:
                         attr = req.split("=")
-                        if attr[0]=="alert":
-                            pass
+                        if isAPI:
+                            messageQueue.put((attr[0],attr[1]))
+                            self.send_response(200)
+                            return
+                        if attr[0]=="httpapi":
+                            if attr[1]=="true":
+                                isAPI = True
+                                continue
                         #implement needed
                         #print(attr[0]+"\n"+attr[1])
                         #print(type(messageQueue))
@@ -358,6 +365,12 @@ class GPIOManager:
                         self.updatePorts()
                     except:
                         print("Failed to Update Info")
+                else:
+                    if message[1] == "1" or message[1].lower() == "true" or message[1].lower() == "3.3v":
+                        self.GPIOStatus[int(message[0])] = True
+                    else:
+                        self.GPIOStatus[int(message[0])] = False
+                    self.updatePorts()
 
 
 
