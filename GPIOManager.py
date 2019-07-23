@@ -33,19 +33,27 @@ class httpServer(threading.Thread):
                     #print(type(cookedRequests))
                     isAPI = False
                     for req in cookedRequests:
-                        attr = req.split("=")
-                        if isAPI:
+                        try:
+                            attr = req.split("=")
+                            if isAPI:
+                                if attr[0] == "\0" and attr[1] == "\0":
+                                    self.send_response(200)
+                                    self.wfile.write("200".encode())
+                                    return
+                                messageQueue.put((attr[0],attr[1]))
+                            if attr[0]=="httpapi":
+                                if attr[1]=="true":
+                                    isAPI = True
+                                    cookedRequests.append(["\0","\0"])
+                                    continue
+                            #implement needed
+                            #print(attr[0]+"\n"+attr[1])
+                            #print(type(messageQueue))
                             messageQueue.put((attr[0],attr[1]))
-                            self.send_response(200)
+                        except:
+                            self.send_response(400)
+                            self.wfile.write("400".encode())
                             return
-                        if attr[0]=="httpapi":
-                            if attr[1]=="true":
-                                isAPI = True
-                                continue
-                        #implement needed
-                        #print(attr[0]+"\n"+attr[1])
-                        #print(type(messageQueue))
-                        messageQueue.put((attr[0],attr[1]))
                     pass
                 self.send_response(200)
                 self.send_header("Content-type","text/html")
